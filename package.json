@@ -1,0 +1,23 @@
+{
+  "type": "module",
+  "main": "./index.js",
+  "name": "ylml",
+  "version": "1.0.0",
+  "description": "YAML Like Markup Language",
+  "bin": {
+    "ylml": "./index.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "exports": {
+    ".": "./ylml.js"
+  },
+  "dependencies": {
+    "commander": "^9.0.0",
+    "globby": "^13.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^17.0.21",
+    "eslint": "^8.10.0"
+  }
+}

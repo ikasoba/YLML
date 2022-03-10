@@ -1,0 +1,25 @@
+!DOCTYPE HTML:
+
+###
+multiline comment
+###
+
+#comment
+
+html:
+  head:
+    meta name="viewport", content="width=device-width,initial-scale=1":
+  body:
+    p style="color: red;": Hello, World!
+    h1: h1 text
+    h2: h2 text
+    h3: h3 text
+    h4: h4 text
+    h5: h5 text
+    h6: h6 text
+    b: bold
+    i: italic
+    div: |-
+      hogehoge
+
+      fugafuga

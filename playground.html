@@ -1,0 +1,130 @@
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="google" content="notranslate" />
+    <style>
+      html,body {
+        margin: 0;
+        width:100%;
+        height: 100%;
+        overflow: hidden;
+        box-sizing: border-box;
+      }
+
+      deepl-inline-translate {
+        display: none;
+      }
+
+      body > #l1 {
+        display: flex;
+        width:100vw;
+        min-height: 50vh;
+        max-height: 50vh;
+        flex-direction: row;
+      }
+      body > #l1 > * {
+        width: 50%;
+        overflow: auto;
+      }
+      #preview {
+        padding:0.5rem;
+      }
+      textarea {
+        padding: 0.5rem;
+        background-color: black;
+        color:white;
+        resize: none;
+        border:0px none;
+        border-bottom: 1px solid white;
+        box-sizing: border-box;
+      }
+      #html_code_wrap {
+        display: flex;
+        flex-flow: column;
+        max-height: 50vh;
+        height: 50vh;
+      }
+      #html_code {
+        box-sizing: border-box;
+        margin:0;
+        padding: 0.5rem;
+        height: 100%;
+        background: black;
+        color:white;
+        font-family: monospace;
+        font-size: 10pt;
+        white-space: pre;
+        overflow: scroll;
+      }
+      #error_bar {
+        background:black;
+      }
+      .error {
+        background:red !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="l1">
+      <textarea>
+p style="color: red;": Hello, World!
+h1: h1 text
+h2: h2 text
+h3: h3 text
+h4: h4 text
+h5: h5 text
+h6: h6 text
+b: bold
+i: italic</textarea>
+      <div id="preview">
+      </div>
+    </div>
+    <div id="html_code_wrap">
+      <div id="html_code"></div>
+      <div id="error_bar"><br></div>
+    </div>
+    <script type="module">
+      import * as YLML from "./ylml.js";
+      const {YLMLLexer} = YLML
+      console.log(YLMLLexer)
+      globalThis.YLML=YLML
+      globalThis.YLMLLexer=YLMLLexer
+      const lexer=new YLMLLexer()
+      const textarea = document.querySelector("#l1 > textarea")
+      const preview = document.querySelector("#l1 > #preview")
+      const code = document.querySelector("#html_code")
+      const errorBar = document.querySelector("#error_bar")
+      const onInput = ()=>{
+        errorBar.classList.remove("error")
+        try {
+          const src = lexer.lex(textarea.value,1).map(x=>x.toHTML()).join("\n")
+          preview.innerHTML=src
+          code.innerText=src
+        }catch {
+          onError()
+        }
+      }
+      const onError = () => {
+        errorBar.classList.add("error")
+      }
+      onInput()
+      textarea.addEventListener("keydown",(e)=>{
+        if (event.isComposing || event.keyCode === 229) {
+          return;
+        }
+        if (e.key=="Tab"){
+          textarea.ariaCurrent
+          const start=textarea.selectionStart,
+            end=textarea.selectionEnd,
+            d=textarea.selectionDirection
+          textarea.value=textarea.value.slice(0,textarea.selectionStart)+"  "+ textarea.value.slice(textarea.selectionEnd)
+          e.preventDefault()
+          textarea.setSelectionRange(start+2,start+2,d)
+          onInput()
+          return
+        }
+      })
+      textarea.addEventListener("input",onInput)
+    </script>
+  </body>
+</html>
