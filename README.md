@@ -2,15 +2,24 @@
 
 ## what's this
 YLML is a markup language similar to YAML!
+
 You can write it like this:
 ```
 # These are all the same
-element:
-  child
+element: child
 "element": child
-'element': element: child
+'element': child
 
-# Attributes can be specified like this
+# Nested structures are also possible.
+element:
+  element: hogehoge
+  element:
+    element: fugafuga
+
+# If there is no more than one child, it can be written on a single line
+element: element: element: hogehoge
+
+# Attributes are written like this
 element attr1="double quote", attr2='single quote', attr3=no_quote:
 
 # The doctype is specified like this
