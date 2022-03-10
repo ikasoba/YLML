@@ -14,9 +14,7 @@ export const attrs = r`${attr}(?:[\\t ]*,[\\t ]*${attr})*`()
 export const tagname = /[a-zA-Z0-9-]+|"[a-zA-Z0-9\-:]+"|'[a-zA-Z0-9\-:]+'/
 export const doctype_legacy = /[Ss][Yy][Ss][Tt][Ee][Mm][ \t]+(?:"about:legacy-compat"|'about:legacy-compat')/
 export const doctype = 
-  r`![Dd][Oo][Cc][Tt][Yy][Pp][Ee][ \\t]+[Hh][Tt][Mm][Ll](?:[\\t ]+${
-    doctype_legacy
-  })?[\\t ]*:`()
+  r`![Dd][Oo][Cc][Tt][Yy][Pp][Ee][ \\t]+[Hh][Tt][Mm][Ll](?:[\\t ]+([^\\r\\n<>]+))?[\\t ]*:[\\t ]*$`()
 export const indent = r` +|\t+`()
 export const tag = r`${tagname}(?:[\\t ]+${attrs})?[\\t ]*:`()
 export const comment = r`#.*`()
@@ -96,11 +94,11 @@ export class MultilineComment extends Comment {
 }
 
 export class Doctype {
-  constructor(legacy=false){
-    this.legacy=legacy
+  constructor(ext=""){
+    this.ext=ext
   }
   toHTML(){
-    return `<!DOCTYPE HTML${this.legacy ? ` SYSTEM "about:legacy-compat"` : ""}>`
+    return `<!DOCTYPE HTML${this.ext!="" ? " "+this.ext : ""}>`
   }
 }
 
@@ -190,10 +188,11 @@ export function parseLiteral(literal,t=0,mm=0){
   }else if (mm>0){
     // +
     if ((mm&LITERAL_MODE.ML_NO_IGNORE_LINES)==0){
-      literal=literal.replace(/(?:\r\n|\r|\n)+$/g,"")
-    }else if (mm&LITERAL_MODE.ML_NO_IGNORE_LINES){
-      literal+="\n"
-      literal=literal.replace(/(?:\r\n|\r|\n)+$/g,m=>"<br>".repeat(m.length))
+      literal=literal.replace(/(?:\r\n|\r|\n)+$/g,"\n")
+    }
+    // -
+    if (mm&LITERAL_MODE.ML_POP_LB){
+      literal=literal.replace(/(?:\r\n|\r|\n)$/,"")
     }
     // |
     if (mm&LITERAL_MODE.ML_LB_BR){
@@ -202,9 +201,6 @@ export function parseLiteral(literal,t=0,mm=0){
     // >
     if (mm&LITERAL_MODE.ML_LB_SP){
       literal=literal.replace(/\r\n|\r|\n/g," ")
-    }
-    if ((mm&LITERAL_MODE.ML_NO_IGNORE_LINES)==0 && ((mm&LITERAL_MODE.ML_POP_LB)==0)){
-      literal+="<br>"
     }
   }
   if (t>0 && t<4 && ((literal[0]!=quote) || (literal.at(-1)!=quote))){
@@ -277,10 +273,10 @@ export class YLMLLexer {
         l_i++
         continue
       }
-      if (l_i==0 && (m=line.match(r`^${doctype}`()))){
+      //eslint-disable-next-line
+      if (m=line.match(r`^${doctype}`())){
         log(`match doctype:`,m)
-        const dt = m[0].slice(0,-1).split(/[\t ]+/)
-        res.push(new Doctype(dt.length==4))
+        res.push(new Doctype(m[1]))
         l_i++
         continue
       //eslint-disable-next-line
@@ -291,87 +287,87 @@ export class YLMLLexer {
         if (element[0][0]=='"' || (element[0][0]=="'"))element[0]=element[0].slice(1,-1)
         log(`element:`,element,m[0].slice(0,-1))
         const child = []
-        const block=[]
         let ln = line.slice(m[0].length).replace(/^[\t ]+/,"");
         l_i++
-        const level = lines[l_i] ? lines[l_i].match(r`^${indent}`())?.[0] : null
-        log("level:",level)
-        if (!ln.match(/^[|>][-+]?[\t ]*$/) && level){
+        if (ln[0]=='"'){
+          // 文字列リテラルなら
+          let lns = [ln];
+          let inLiteral = false;
+          log(`--- find end of literal ---`)
           for (let i=l_i;i<lines.length;i++){
             const line = lines[i]
-            let m=line.match(r`^${indent}`()) || line=="" ? [line] : null;
-            log(`find blocks:`,m)
-            if (!m){
+            let indx=line.indexOf('"');
+            if (line[indx-1]=="\\")indx=-1
+            if (indx>=0){
+              lns.push(line.slice(0,indx+1))
+              l_i++
+              inLiteral=!inLiteral
+              if (inLiteral==true){break}
+            }else{
+              lns.push(line)
+              l_i++
+            }
+          }
+          log("lines:",lns)
+          lns=lns.join("\n")
+          ln=parseLiteral(lns,LITERAL_MODE.get(lns[0])|LITERAL_MODE.ALLOW_ESCAPE).slice(1,-1)
+          child.push(new Text(ln))
+        //eslint-disable-next-line
+        }else if (m=ln.match(/^([|>])([-+])?[ \t]*$/)){
+          // 複数行モードが指定されれば
+          let lns = [];
+          const level = lines[l_i] ? lines[l_i].match(r`^${indent}`())?.[0] : null
+          log(`--- find text children ---`)
+          for (let i=l_i;i<lines.length;i++){
+            const line = lines[i]
+            let m=line.match(r`^${indent}`());
+            if (line!="" && !m){
               break
             }else if (line=="" || m[0].startsWith(level)){
-              block.push(line.slice(level.length))
+              lns.push(line.slice(level.length))
               l_i++
             }else{
               break
             }
           }
-          child.push(...this.lex(block,debug))
+          lns.push("\n")
+          log("lines:",lns)
+          lns=lns.join("\n")
+          let mode=0;
+          log("mode:",m)
+          if (m[1]=="|"){
+            mode|=LITERAL_MODE.ML_LB_BR
+          }else if (m[1]==">"){
+            mode|=LITERAL_MODE.ML_LB_SP
+          }
+          if (m[2]=="-"){
+            mode|=LITERAL_MODE.ML_POP_LB
+          }else if (m[2]=="+"){
+            mode|=LITERAL_MODE.ML_NO_IGNORE_LINES
+          }
+          ln=parseLiteral(lns,0,mode)
+          child.push(new Text(ln))
         }else{
-          log(`one line child:`,m)
-          // 文字列リテラルなら
-          if (ln[0]=='"'){
-            let lns = [ln];
-            let inLiteral = false;
-            log(`--- find end of literal ---`)
+          const block=[]
+          block.push(ln)
+          const level = lines[l_i] ? lines[l_i].match(r`^${indent}`())?.[0] : null
+          log("level:",level)
+          if (level){
             for (let i=l_i;i<lines.length;i++){
               const line = lines[i]
-              let indx=line.indexOf('"');
-              if (line[indx-1]=="\\")indx=-1
-              if (indx>=0){
-                lns.push(line.slice(0,indx+1))
-                l_i++
-                inLiteral=!inLiteral
-                if (inLiteral==true){break}
-              }else{
-                lns.push(line)
-                l_i++
-              }
-            }
-            log("lines:",lns)
-            lns=lns.join("\n")
-            ln=parseLiteral(lns,LITERAL_MODE.get(lns[0])|LITERAL_MODE.ALLOW_ESCAPE).slice(1,-1)
-            child.push(new Text(ln))
-          //eslint-disable-next-line
-          }else if (m=ln.match(/^([|>])([-+])?[ \t]*$/)){
-            let lns = [];
-            const level = lines[l_i] ? lines[l_i].match(r`^${indent}`())?.[0] : null
-            log(`--- find text children ---`)
-            for (let i=l_i;i<lines.length;i++){
-              const line = lines[i]
-              let m=line.match(r`^${indent}`());
-              if (line!="" && !m){
+              let m=line.match(r`^${indent}`()) || line=="" ? [line] : null;
+              log(`find blocks:`,m)
+              if (!m){
                 break
               }else if (line=="" || m[0].startsWith(level)){
-                lns.push(line.slice(level.length))
+                block.push(line.slice(level.length))
                 l_i++
               }else{
                 break
               }
             }
-            log("lines:",lns)
-            lns=lns.join("\n")
-            let mode=0;
-            log("mode:",m)
-            if (m[1]=="|"){
-              mode|=LITERAL_MODE.ML_LB_BR
-            }else if (m[1]==">"){
-              mode|=LITERAL_MODE.ML_LB_SP
-            }
-            if (m[2]=="-"){
-              mode|=LITERAL_MODE.ML_POP_LB
-            }else if (m[2]=="+"){
-              mode|=LITERAL_MODE.ML_NO_IGNORE_LINES
-            }
-            ln=parseLiteral(lns,0,mode)
-            child.push(new Text(ln))
-          }else{
-            child.push(...this.lex(ln,debug))
           }
+          child.push(...this.lex(block,debug))
         }
         res.push(new Element(element[0],child,element[1] ? parseAttrs(element[1],debug) : {}))
         continue

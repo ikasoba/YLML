@@ -100,7 +100,8 @@ i: italic</textarea>
           const src = lexer.lex(textarea.value,1).map(x=>x.toHTML()).join("\n")
           preview.innerHTML=src
           code.innerText=src
-        }catch {
+        }catch(e){
+          console.error(e)
           onError()
         }
       }
